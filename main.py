@@ -6,8 +6,8 @@ from fastapi.responses import HTMLResponse
 import yt_dlp
 
 
-# Webshare proxy configuration
-PROXY_URL = "http://ykzoraas:gc56iqd9iwbc@p.webshare.io:80"
+# Optional proxy configuration via environment variable
+PROXY_URL = os.environ.get("PROXY_URL", "")
 
 
 app = FastAPI(
@@ -67,8 +67,9 @@ def get_subtitles_with_ytdlp(video_id: str, lang: str = "en"):
         'subtitlesformat': 'json3',
         'quiet': True,
         'no_warnings': True,
-        'proxy': PROXY_URL,
     }
+    if PROXY_URL:
+        ydl_opts['proxy'] = PROXY_URL
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
@@ -163,8 +164,9 @@ def get_available_languages(video_id: str):
             'skip_download': True,
             'quiet': True,
             'no_warnings': True,
-            'proxy': PROXY_URL,
         }
+        if PROXY_URL:
+            ydl_opts['proxy'] = PROXY_URL
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
