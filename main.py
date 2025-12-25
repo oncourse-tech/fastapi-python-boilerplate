@@ -1,16 +1,8 @@
 import re
+import json
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
-from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api.proxies import WebshareProxyConfig
-from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
-
-
-# Configure proxy for YouTube requests (required for cloud deployments)
-proxy_config = WebshareProxyConfig(
-    proxy_username="ykzoraas",
-    proxy_password="gc56iqd9iwbc",
-)
+import yt_dlp
 
 
 app = FastAPI(
@@ -58,6 +50,63 @@ def extract_video_id(url_or_id: str) -> str:
     raise ValueError("Invalid YouTube URL or video ID")
 
 
+def get_subtitles_with_ytdlp(video_id: str, lang: str = "en"):
+    """Fetch subtitles using yt-dlp."""
+    url = f"https://www.youtube.com/watch?v={video_id}"
+
+    ydl_opts = {
+        'skip_download': True,
+        'writesubtitles': True,
+        'writeautomaticsub': True,
+        'subtitleslangs': [lang, 'en'],
+        'subtitlesformat': 'json3',
+        'quiet': True,
+        'no_warnings': True,
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+
+        subtitles = info.get('subtitles', {})
+        automatic_captions = info.get('automatic_captions', {})
+
+        # Try requested language first, then fall back to English
+        for lang_code in [lang, 'en']:
+            # Check manual subtitles first
+            if lang_code in subtitles:
+                for fmt in subtitles[lang_code]:
+                    if fmt.get('ext') == 'json3':
+                        return fmt.get('url'), lang_code, False
+            # Then check automatic captions
+            if lang_code in automatic_captions:
+                for fmt in automatic_captions[lang_code]:
+                    if fmt.get('ext') == 'json3':
+                        return fmt.get('url'), lang_code, True
+
+        return None, None, None
+
+
+def parse_json3_subtitles(subtitle_url: str):
+    """Fetch and parse json3 subtitle format."""
+    import urllib.request
+
+    with urllib.request.urlopen(subtitle_url) as response:
+        data = json.loads(response.read().decode())
+
+    transcript = []
+    for event in data.get('events', []):
+        if 'segs' in event:
+            text = ''.join(seg.get('utf8', '') for seg in event['segs']).strip()
+            if text:
+                transcript.append({
+                    'text': text,
+                    'start': event.get('tStartMs', 0) / 1000,
+                    'duration': event.get('dDurationMs', 0) / 1000
+                })
+
+    return transcript
+
+
 @app.get("/api/transcript/{video_id:path}")
 def get_transcript(video_id: str, lang: str = "en"):
     """
@@ -72,21 +121,23 @@ def get_transcript(video_id: str, lang: str = "en"):
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
-        ytt_api = YouTubeTranscriptApi(proxy_config=proxy_config)
-        transcript_data = ytt_api.fetch(extracted_id, languages=[lang, 'en'])
+        subtitle_url, actual_lang, is_auto = get_subtitles_with_ytdlp(extracted_id, lang)
 
-        full_text = " ".join([entry.text for entry in transcript_data])
+        if not subtitle_url:
+            raise HTTPException(status_code=404, detail="No transcript available for this video")
+
+        transcript_data = parse_json3_subtitles(subtitle_url)
+        full_text = " ".join([entry['text'] for entry in transcript_data])
 
         return {
             "video_id": extracted_id,
-            "language": lang,
-            "transcript": [{"text": entry.text, "start": entry.start, "duration": entry.duration} for entry in transcript_data],
+            "language": actual_lang,
+            "is_auto_generated": is_auto,
+            "transcript": transcript_data,
             "full_text": full_text
         }
-    except TranscriptsDisabled:
-        raise HTTPException(status_code=404, detail="Transcripts are disabled for this video")
-    except NoTranscriptFound:
-        raise HTTPException(status_code=404, detail=f"No transcript found for language: {lang}")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -100,24 +151,39 @@ def get_available_languages(video_id: str):
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
-        ytt_api = YouTubeTranscriptApi(proxy_config=proxy_config)
-        transcript_list = ytt_api.list(extracted_id)
+        url = f"https://www.youtube.com/watch?v={extracted_id}"
 
-        languages = []
-        for transcript in transcript_list:
-            languages.append({
-                "language": transcript.language,
-                "language_code": transcript.language_code,
-                "is_generated": transcript.is_generated,
-                "is_translatable": transcript.is_translatable
-            })
-
-        return {
-            "video_id": extracted_id,
-            "languages": languages
+        ydl_opts = {
+            'skip_download': True,
+            'quiet': True,
+            'no_warnings': True,
         }
-    except TranscriptsDisabled:
-        raise HTTPException(status_code=404, detail="Transcripts are disabled for this video")
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+
+            subtitles = info.get('subtitles', {})
+            automatic_captions = info.get('automatic_captions', {})
+
+            languages = []
+
+            for lang_code in subtitles:
+                languages.append({
+                    "language_code": lang_code,
+                    "is_generated": False
+                })
+
+            for lang_code in automatic_captions:
+                if lang_code not in subtitles:
+                    languages.append({
+                        "language_code": lang_code,
+                        "is_generated": True
+                    })
+
+            return {
+                "video_id": extracted_id,
+                "languages": languages
+            }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
