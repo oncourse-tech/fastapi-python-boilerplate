@@ -9,6 +9,9 @@ import yt_dlp
 # Optional proxy configuration via environment variable
 PROXY_URL = os.environ.get("PROXY_URL", "")
 
+# Path to cookies file (relative to this script)
+COOKIES_FILE = os.path.join(os.path.dirname(__file__), "cookies.txt")
+
 
 app = FastAPI(
     title="Vercel + FastAPI",
@@ -68,6 +71,8 @@ def get_subtitles_with_ytdlp(video_id: str, lang: str = "en"):
         'quiet': True,
         'no_warnings': True,
     }
+    if os.path.exists(COOKIES_FILE):
+        ydl_opts['cookiefile'] = COOKIES_FILE
     if PROXY_URL:
         ydl_opts['proxy'] = PROXY_URL
 
@@ -165,6 +170,8 @@ def get_available_languages(video_id: str):
             'quiet': True,
             'no_warnings': True,
         }
+        if os.path.exists(COOKIES_FILE):
+            ydl_opts['cookiefile'] = COOKIES_FILE
         if PROXY_URL:
             ydl_opts['proxy'] = PROXY_URL
 
