@@ -1,1 +1,3 @@
 fastapi
+yt-dlp
+youtube-transcript-api

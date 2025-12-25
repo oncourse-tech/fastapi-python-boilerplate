@@ -1,5 +1,8 @@
-from fastapi import FastAPI
+import re
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
 
 
 app = FastAPI(
@@ -32,6 +35,83 @@ def get_item(item_id: int):
         },
         "timestamp": "2024-01-01T00:00:00Z"
     }
+
+
+def extract_video_id(url_or_id: str) -> str:
+    """Extract YouTube video ID from URL or return as-is if already an ID."""
+    patterns = [
+        r'(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})',
+        r'^([a-zA-Z0-9_-]{11})$'
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url_or_id)
+        if match:
+            return match.group(1)
+    raise ValueError("Invalid YouTube URL or video ID")
+
+
+@app.get("/api/transcript/{video_id:path}")
+def get_transcript(video_id: str, lang: str = "en"):
+    """
+    Fetch transcript for a YouTube video.
+
+    - video_id: YouTube video ID or full URL
+    - lang: Language code for transcript (default: en)
+    """
+    try:
+        extracted_id = extract_video_id(video_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    try:
+        ytt_api = YouTubeTranscriptApi()
+        transcript_data = ytt_api.fetch(extracted_id, languages=[lang, 'en'])
+
+        full_text = " ".join([entry.text for entry in transcript_data])
+
+        return {
+            "video_id": extracted_id,
+            "language": lang,
+            "transcript": [{"text": entry.text, "start": entry.start, "duration": entry.duration} for entry in transcript_data],
+            "full_text": full_text
+        }
+    except TranscriptsDisabled:
+        raise HTTPException(status_code=404, detail="Transcripts are disabled for this video")
+    except NoTranscriptFound:
+        raise HTTPException(status_code=404, detail=f"No transcript found for language: {lang}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/transcript-languages/{video_id:path}")
+def get_available_languages(video_id: str):
+    """Get available transcript languages for a YouTube video."""
+    try:
+        extracted_id = extract_video_id(video_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    try:
+        ytt_api = YouTubeTranscriptApi()
+        transcript_list = ytt_api.list(extracted_id)
+
+        languages = []
+        for transcript in transcript_list:
+            languages.append({
+                "language": transcript.language,
+                "language_code": transcript.language_code,
+                "is_generated": transcript.is_generated,
+                "is_translatable": transcript.is_translatable
+            })
+
+        return {
+            "video_id": extracted_id,
+            "languages": languages
+        }
+    except TranscriptsDisabled:
+        raise HTTPException(status_code=404, detail="Transcripts are disabled for this video")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/", response_class=HTMLResponse)
