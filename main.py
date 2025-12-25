@@ -2,7 +2,15 @@ import re
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api.proxies import WebshareProxyConfig
 from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
+
+
+# Configure proxy for YouTube requests (required for cloud deployments)
+proxy_config = WebshareProxyConfig(
+    proxy_username="ykzoraas",
+    proxy_password="gc56iqd9iwbc",
+)
 
 
 app = FastAPI(
@@ -64,7 +72,7 @@ def get_transcript(video_id: str, lang: str = "en"):
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
-        ytt_api = YouTubeTranscriptApi()
+        ytt_api = YouTubeTranscriptApi(proxy_config=proxy_config)
         transcript_data = ytt_api.fetch(extracted_id, languages=[lang, 'en'])
 
         full_text = " ".join([entry.text for entry in transcript_data])
@@ -92,7 +100,7 @@ def get_available_languages(video_id: str):
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
-        ytt_api = YouTubeTranscriptApi()
+        ytt_api = YouTubeTranscriptApi(proxy_config=proxy_config)
         transcript_list = ytt_api.list(extracted_id)
 
         languages = []
