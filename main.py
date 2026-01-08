@@ -56,22 +56,25 @@ def get_subtitles_with_ytdlp(video_id: str, lang: str = "en"):
         'cookiefile': cookies_file,
     }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        subtitles = info.get('subtitles', {})
-        automatic_captions = info.get('automatic_captions', {})
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            subtitles = info.get('subtitles', {})
+            automatic_captions = info.get('automatic_captions', {})
 
-        for lang_code in [lang, 'en']:
-            if lang_code in subtitles:
-                for fmt in subtitles[lang_code]:
-                    if fmt.get('ext') == 'json3':
-                        return fmt.get('url'), lang_code, False
-            if lang_code in automatic_captions:
-                for fmt in automatic_captions[lang_code]:
-                    if fmt.get('ext') == 'json3':
-                        return fmt.get('url'), lang_code, True
+            for lang_code in [lang, 'en']:
+                if lang_code in subtitles:
+                    for fmt in subtitles[lang_code]:
+                        if fmt.get('ext') == 'json3':
+                            return fmt.get('url'), lang_code, False, None
+                if lang_code in automatic_captions:
+                    for fmt in automatic_captions[lang_code]:
+                        if fmt.get('ext') == 'json3':
+                            return fmt.get('url'), lang_code, True, None
 
-        return None, None, None
+            return None, None, None, None
+    except Exception as e:
+        return None, None, None, f"Error: {str(e)} | Cookie file: {cookies_file}"
 
 
 def parse_json3_subtitles(subtitle_url: str):
@@ -113,7 +116,10 @@ def get_transcript(video_id: str, lang: str = "en"):
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
-        subtitle_url, actual_lang, is_auto = get_subtitles_with_ytdlp(extracted_id, lang)
+        subtitle_url, actual_lang, is_auto, error_msg = get_subtitles_with_ytdlp(extracted_id, lang)
+
+        if error_msg:
+            raise HTTPException(status_code=500, detail=error_msg)
 
         if not subtitle_url:
             raise HTTPException(status_code=404, detail="No transcript available for this video")
