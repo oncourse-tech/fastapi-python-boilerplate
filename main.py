@@ -49,11 +49,13 @@ def get_subtitles_with_ytdlp(video_id: str, lang: str = "en"):
         'writesubtitles': True,
         'writeautomaticsub': True,
         'subtitleslangs': [lang, 'en'],
-        'subtitlesformat': 'json3',
         'quiet': True,
         'no_warnings': True,
         'cookiefile': cookies_file,
     }
+
+    # Preferred formats in order
+    preferred_formats = ['json3', 'srv3', 'vtt', 'ttml']
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -62,25 +64,45 @@ def get_subtitles_with_ytdlp(video_id: str, lang: str = "en"):
             automatic_captions = info.get('automatic_captions', {})
 
             for lang_code in [lang, 'en']:
-                if lang_code in subtitles:
-                    for fmt in subtitles[lang_code]:
-                        if fmt.get('ext') == 'json3':
-                            return fmt.get('url'), lang_code, False, None
-                if lang_code in automatic_captions:
-                    for fmt in automatic_captions[lang_code]:
-                        if fmt.get('ext') == 'json3':
-                            return fmt.get('url'), lang_code, True, None
+                # Try subtitles first, then automatic captions
+                for caption_source, is_auto in [(subtitles, False), (automatic_captions, True)]:
+                    if lang_code in caption_source:
+                        # Try preferred formats in order
+                        for preferred_ext in preferred_formats:
+                            for fmt in caption_source[lang_code]:
+                                if fmt.get('ext') == preferred_ext:
+                                    return fmt.get('url'), lang_code, is_auto, fmt.get('ext'), None
+                        # Fallback: return first available format
+                        if caption_source[lang_code]:
+                            fmt = caption_source[lang_code][0]
+                            return fmt.get('url'), lang_code, is_auto, fmt.get('ext'), None
 
-            return None, None, None, None
+            return None, None, None, None, None
     except Exception as e:
-        return None, None, None, f"Error: {str(e)} | Cookie file: {cookies_file}"
+        return None, None, None, None, f"Error: {str(e)} | Cookie file: {cookies_file}"
 
 
-def parse_json3_subtitles(subtitle_url: str):
-    """Fetch and parse json3 subtitle format."""
+def parse_subtitles(subtitle_url: str, fmt: str):
+    """Fetch and parse subtitles based on format."""
     with urllib.request.urlopen(subtitle_url) as response:
-        data = json.loads(response.read().decode())
+        content = response.read().decode()
 
+    if fmt == 'json3':
+        return parse_json3(content)
+    elif fmt == 'srv3':
+        return parse_srv3(content)
+    elif fmt == 'vtt':
+        return parse_vtt(content)
+    elif fmt == 'ttml':
+        return parse_ttml(content)
+    else:
+        # Try json3 parsing as default
+        return parse_json3(content)
+
+
+def parse_json3(content: str):
+    """Parse json3 subtitle format."""
+    data = json.loads(content)
     transcript = []
     for event in data.get('events', []):
         if 'segs' in event:
@@ -91,8 +113,93 @@ def parse_json3_subtitles(subtitle_url: str):
                     'start': event.get('tStartMs', 0) / 1000,
                     'duration': event.get('dDurationMs', 0) / 1000
                 })
-
     return transcript
+
+
+def parse_srv3(content: str):
+    """Parse srv3 (YouTube XML) subtitle format."""
+    transcript = []
+    # Simple XML parsing for srv3 format
+    pattern = r'<text start="([^"]+)" dur="([^"]+)"[^>]*>([^<]*)</text>'
+    matches = re.findall(pattern, content)
+    for start, dur, text in matches:
+        text = text.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&#39;', "'").replace('&quot;', '"')
+        text = re.sub(r'<[^>]+>', '', text).strip()
+        if text:
+            transcript.append({
+                'text': text,
+                'start': float(start),
+                'duration': float(dur)
+            })
+    return transcript
+
+
+def parse_vtt(content: str):
+    """Parse VTT subtitle format."""
+    transcript = []
+    lines = content.split('\n')
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        # Look for timestamp lines (00:00:00.000 --> 00:00:00.000)
+        if '-->' in line:
+            times = line.split('-->')
+            start_time = parse_vtt_timestamp(times[0].strip())
+            end_time = parse_vtt_timestamp(times[1].strip().split()[0])
+            # Collect text lines
+            i += 1
+            text_lines = []
+            while i < len(lines) and lines[i].strip():
+                text_lines.append(lines[i].strip())
+                i += 1
+            text = ' '.join(text_lines)
+            text = re.sub(r'<[^>]+>', '', text).strip()
+            if text:
+                transcript.append({
+                    'text': text,
+                    'start': start_time,
+                    'duration': end_time - start_time
+                })
+        i += 1
+    return transcript
+
+
+def parse_vtt_timestamp(ts: str) -> float:
+    """Convert VTT timestamp to seconds."""
+    parts = ts.replace(',', '.').split(':')
+    if len(parts) == 3:
+        return float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
+    elif len(parts) == 2:
+        return float(parts[0]) * 60 + float(parts[1])
+    return 0.0
+
+
+def parse_ttml(content: str):
+    """Parse TTML subtitle format."""
+    transcript = []
+    pattern = r'<p[^>]*begin="([^"]+)"[^>]*end="([^"]+)"[^>]*>([^<]*(?:<[^>]*>[^<]*)*)</p>'
+    matches = re.findall(pattern, content)
+    for begin, end, text in matches:
+        start = parse_ttml_timestamp(begin)
+        end_time = parse_ttml_timestamp(end)
+        text = re.sub(r'<[^>]+>', '', text).strip()
+        if text:
+            transcript.append({
+                'text': text,
+                'start': start,
+                'duration': end_time - start
+            })
+    return transcript
+
+
+def parse_ttml_timestamp(ts: str) -> float:
+    """Convert TTML timestamp to seconds."""
+    # Handle formats like "00:00:00.000" or "00:00:00,000"
+    ts = ts.replace(',', '.')
+    parts = ts.split(':')
+    if len(parts) == 3:
+        return float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
+    return 0.0
 
 
 @app.get("/")
@@ -115,7 +222,7 @@ def get_transcript(video_id: str, lang: str = "en"):
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
-        subtitle_url, actual_lang, is_auto, error_msg = get_subtitles_with_ytdlp(extracted_id, lang)
+        subtitle_url, actual_lang, is_auto, fmt, error_msg = get_subtitles_with_ytdlp(extracted_id, lang)
 
         if error_msg:
             raise HTTPException(status_code=500, detail=error_msg)
@@ -123,7 +230,7 @@ def get_transcript(video_id: str, lang: str = "en"):
         if not subtitle_url:
             raise HTTPException(status_code=404, detail="No transcript available for this video")
 
-        transcript_data = parse_json3_subtitles(subtitle_url)
+        transcript_data = parse_subtitles(subtitle_url, fmt)
         full_text = " ".join([entry['text'] for entry in transcript_data])
 
         return {
