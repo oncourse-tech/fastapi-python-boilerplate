@@ -10,9 +10,14 @@ import yt_dlp
 
 # YouTube cookies for authentication (base64 encoded)
 COOKIES_BASE64 = "IyBOZXRzY2FwZSBIVFRQIENvb2tpZSBGaWxlCiMgaHR0cHM6Ly9jdXJsLmhheHguc2UvcmZjL2Nvb2tpZV9zcGVjLmh0bWwKIyBUaGlzIGlzIGEgZ2VuZXJhdGVkIGZpbGUhIERvIG5vdCBlZGl0LgoKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE3NzAzNjc4NzgJR1BTCTEKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDQ5MjYxMDQJUFJFRglmND00MDAwMDAwJmY2PTQwMDAwMDAwJnR6PUFzaWEuQ2FsY3V0dGEKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDE5MDIxMDMJX19TZWN1cmUtMVBTSURUUwlzaWR0cy1DalFCN0lfNjlBamlPRC1nQlVFMm4tNjVEVUdhLXRyd3RPRlZUZ0RjWUNUdWhvME9OQ3Y2eUdNN3JjY3FCRV9ySU9JbF9yLXdFQUEKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDE5MDIxMDMJX19TZWN1cmUtM1BTSURUUwlzaWR0cy1DalFCN0lfNjlBamlPRC1nQlVFMm4tNjVEVUdhLXRyd3RPRlZUZ0RjWUNUdWhvME9OQ3Y2eUdNN3JjY3FCRV9ySU9JbF9yLXdFQUEKLnlvdXR1YmUuY29tCVRSVUUJLwlGQUxTRQkxODA0OTI2MTAzCUhTSUQJQV8xMzdGb2Q4NUdPZGhDbk4KLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDQ5MjYxMDMJU1NJRAlBb1Jndm1Gem5MNEtBVnZTTQoueW91dHViZS5jb20JVFJVRQkvCUZBTFNFCTE4MDQ5MjYxMDMJQVBJU0lECTVRVXZmVVAydkY4SXUzVWkvQThUX2s0NW5BcGtoclczVnIKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDQ5MjYxMDMJU0FQSVNJRAl4TzIteWJTS3h6RGFLdGhVL0FQangySXNlR0hZNUl6VGdHCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODA0OTI2MTAzCV9fU2VjdXJlLTFQQVBJU0lECXhPMi15YlNLeHpEYUt0aFUvQVBqeDJJc2VHSFk1SXpUZ0cKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDQ5MjYxMDMJX19TZWN1cmUtM1BBUElTSUQJeE8yLXliU0t4ekRhS3RoVS9BUGp4MklzZUdIWTVJelRnRwoueW91dHViZS5jb20JVFJVRQkvCUZBTFNFCTE4MDQ5MjYxMDMJU0lECWcuYTAwMDZnakUyd09NOUtIRy1ILWlvTFBGQ09taVFOTFE3TURROGEzQUpIVk1OZm00SmowLXppQWl2c1pGbVMwbWNjLUJETWVGeUFBQ2dZS0FkUVNBUlFTRlFIR1gyTWlrdFkxbWk1NkhPaWY2X0Z6R0M3UUN4b1ZBVUY4eUtxVTE3ZXh2UkZEZWdqSUlJTjFHOWRIMDA3NgoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgwNDkyNjEwMwlfX1NlY3VyZS0xUFNJRAlnLmEwMDA2Z2pFMndPTTlLSEctSC1pb0xQRkNPbWlRTkxRN01EUThhM0FKSFZNTmZtNEpqMC14czQwS0lmYVkxLW9IOC1ZRnB1eVZRQUNnWUtBUThTQVJRU0ZRSEdYMk1pcEJmN3Qyc2JRaENPcmQ4UnZKQW5meG9WQVVGOHlLb2x5bnBFMVJTZ3lESXVTWVdqb1dINTAwNzYKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDQ5MjYxMDMJX19TZWN1cmUtM1BTSUQJZy5hMDAwNmdqRTJ3T005S0hHLUgtaW9MUEZDT21pUU5MUTdNRFE4YTNBSkhWTU5mbTRKajAtTGMzdUFma2dvdm14TURjNnNIT2NYQUFDZ1lLQVhrU0FSUVNGUUhHWDJNaUN4dVVHbE1qVGRRcTgzR2ZCRmdrZFJvVkFVRjh5S3JCVXo1YkR3bmpUZV84dWphaFFJQXMwMDc2Ci55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODA0OTI2MTAzCUxPR0lOX0lORk8JQUZtbUYyc3dSZ0loQVA4anFNblV1TzJXa3UzWXgyNWRabThiMnVOZ1Y4aGFpZzZoV0Vnd1V4Zk1BaUVBcDRwUzBiVENrcklnY3dwWVI1azctaVpQeU56NWxTdDdXcEEzY3FjSkJ1STpRVVEzTWpObWVFNDJkWGxUWTI5SWExVlJPVGhrTFUxNkxWbEJVRXhLVWs5NWJGWTBRVWxvUzNaV1VXcGZkR2RNYzFCU05GWlZkV3cxVTA1c1ZUUkNaM0ZJVFRJNVVtVndTRkF6VVZaM2VXaFNWVUZzVVVoQmJYQTBVbmxPYWpKeVIyUTBTWEoxZFVoWFpreG9hMjg1TW1OaFkxVmlVM296ZDB4TVduVmFjM1pPU0ZKalIwUTBkbkJVUlV4dVFUUk1jRkZMVlhCNFlqSXlVRWx6V2pGcFJsUkIKLnlvdXR1YmUuY29tCVRSVUUJLwlGQUxTRQkxODAxOTAyMTEyCVNJRENDCUFLRXlYelhtVDZoUWNUc1hMd1cxMklNVHFPUnY2Tm44dWpSa0R3T2pUUnF3cV8tZkpjNzgtVFc2NmNZaXpaelA4MUdROUlLUGZ3Ci55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODAxOTAyMTEyCV9fU2VjdXJlLTFQU0lEQ0MJQUtFeVh6WENOWVk4YzVtWFRIc3VYZzFyWGpsbnVUbk1OeGNkZVZPM3lGeU9zMnFEWVhIOXFLZW9JcHZ3SWNpeXlaV2hoZkEteUEKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDE5MDIxMTIJX19TZWN1cmUtM1BTSURDQwlBS0V5WHpVamtSU0JiVGRORDZkRk1FSGZDQWRvN0Q1eWFjeElkRFcyaW1CVXA4Z0dmUHlHSDRVdnZmWGIyZFE0cjlnbHJXMVQKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTAJWVNDCVc4bWZCVzF6S1pFCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxNzg1OTE4MTA3CVZJU0lUT1JfSU5GTzFfTElWRQluRXV3ZmhJRWM4NAoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTc4NTkxODEwNwlWSVNJVE9SX1BSSVZBQ1lfTUVUQURBVEEJQ2dKSlRoSUVHZ0FnVnclM0QlM0QKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE3ODU5MTgwNzcJX19TZWN1cmUtWU5JRAkxNS5ZVD1RRVlfbDhxMG9VSzNNaGNKQV9FcG5wbTgxRFcwWUVlZkFiVTl0UF9uVFUwaTV3YkxtenZmcE00Q0w3TjN3NVpYRkFweC1xMXJUODhCOElpYi02NXE3a0lMNzJFbVQxWjgydWFQVEVsQWpudWdqaDMyV1EwaG9uRFZHZDRheWtaZ3dMNDVGdnQ4VzN2aFVYZDAzcS1LN1dLZzlXWUt2ZzNKWGYtcURBeC01ampya3drdmNieC1tYzJxalVBRXBhTDliWU9yUlJwbEJ4TTAxandYb1hxd2lMYWNSa3UwT0Z0bEhLTTRaLXV6NTlEYVJnV1phOWg4OHVrRTNidV9iTnlsTElWeGZwanpyNjlYS2hPakgtcHR4SWlpd3R0ZUhzWHJ6a3J2SWpIRmxPU19YRW4wM2Y3MzlfOWpNN3ZsdXktWTRoSE8xT2RPckNDMWFoeDJPNDZSa1EKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE3ODU5MTgwNzkJX19TZWN1cmUtUk9MTE9VVF9UT0tFTglDSTNvb3JQVTlQYVpvUUVRanRqTnliZkVrZ01ZaE9lVnlyZkVrZ00lM0QK"
+def get_cookies_content():
+    """Decode and return the cookies content."""
+    return base64.b64decode(COOKIES_BASE64).decode('utf-8')
+
+
 def get_cookies_file():
     """Create a temporary cookies file from base64 encoded content and return its path."""
-    cookies_content = base64.b64decode(COOKIES_BASE64).decode('utf-8')
+    cookies_content = get_cookies_content()
     tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
     tmp.write(cookies_content)
     tmp.close()
@@ -50,6 +55,8 @@ def get_subtitles_with_ytdlp(video_id: str, lang: str = "en"):
         'quiet': True,
         'no_warnings': True,
         'cookiefile': cookies_file,
+        'ignore_no_formats_error': True,
+        'extract_flat': False,
     }
 
     # Preferred formats in order
@@ -77,7 +84,8 @@ def get_subtitles_with_ytdlp(video_id: str, lang: str = "en"):
 
             return None, None, None, None, None
     except Exception as e:
-        return None, None, None, None, f"Error: {str(e)} | Cookie file: {cookies_file}"
+        cookies_content = get_cookies_content()
+        return None, None, None, None, f"Error: {str(e)} | Cookie file: {cookies_file} | Cookies: {cookies_content}"
 
 
 def parse_subtitles(subtitle_url: str, fmt: str):
@@ -265,6 +273,8 @@ def get_available_languages(video_id: str):
             'quiet': True,
             'no_warnings': True,
             'cookiefile': cookies_file,
+            'ignore_no_formats_error': True,
+            'extract_flat': False,
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -281,7 +291,8 @@ def get_available_languages(video_id: str):
 
             return {"video_id": extracted_id, "languages": languages}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        cookies_content = get_cookies_content()
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)} | Cookie file: {cookies_file} | Cookies: {cookies_content}")
 
 
 @app.get("/api/list-formats/{video_id:path}")
@@ -307,6 +318,8 @@ def list_formats(video_id: str, lang: str = "en"):
             'quiet': True,
             'no_warnings': True,
             'cookiefile': cookies_file,
+            'ignore_no_formats_error': True,
+            'extract_flat': False,
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -355,4 +368,5 @@ def list_formats(video_id: str, lang: str = "en"):
 
             return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)} | Cookie file: {cookies_file}")
+        cookies_content = get_cookies_content()
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)} | Cookie file: {cookies_file} | Cookies: {cookies_content}")
