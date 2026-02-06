@@ -44,6 +44,7 @@ def get_subtitles_with_ytdlp(video_id: str, lang: str = "en"):
     url = f"https://www.youtube.com/watch?v={video_id}"
     cookies_file = get_cookies_file()
 
+    print(cookies_file)
     ydl_opts = {
         'skip_download': True,
         'writesubtitles': True,
