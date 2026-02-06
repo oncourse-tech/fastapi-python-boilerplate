@@ -285,3 +285,77 @@ def get_available_languages(video_id: str):
             return {"video_id": extracted_id, "languages": languages}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/list-formats/{video_id:path}")
+def list_formats(video_id: str, lang: str = "en"):
+    """
+    List available subtitle formats for a YouTube video.
+    Useful for debugging format availability issues.
+
+    - **video_id**: YouTube video ID or full URL
+    - **lang**: Language code to check formats for (default: en)
+    """
+    try:
+        extracted_id = extract_video_id(video_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    try:
+        url = f"https://www.youtube.com/watch?v={extracted_id}"
+        cookies_file = get_cookies_file()
+
+        ydl_opts = {
+            'skip_download': True,
+            'quiet': True,
+            'no_warnings': True,
+            'cookiefile': cookies_file,
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            subtitles = info.get('subtitles', {})
+            automatic_captions = info.get('automatic_captions', {})
+
+            result = {
+                "video_id": extracted_id,
+                "cookie_file": cookies_file,
+                "requested_lang": lang,
+                "subtitles": {},
+                "automatic_captions": {}
+            }
+
+            # Get formats for subtitles
+            if lang in subtitles:
+                result["subtitles"][lang] = [
+                    {"ext": fmt.get('ext'), "url": fmt.get('url')[:100] + "..." if fmt.get('url') else None}
+                    for fmt in subtitles[lang]
+                ]
+
+            # Get formats for automatic captions
+            if lang in automatic_captions:
+                result["automatic_captions"][lang] = [
+                    {"ext": fmt.get('ext'), "url": fmt.get('url')[:100] + "..." if fmt.get('url') else None}
+                    for fmt in automatic_captions[lang]
+                ]
+
+            # Also show 'en' if different from requested lang
+            if lang != 'en':
+                if 'en' in subtitles:
+                    result["subtitles"]['en'] = [
+                        {"ext": fmt.get('ext'), "url": fmt.get('url')[:100] + "..." if fmt.get('url') else None}
+                        for fmt in subtitles['en']
+                    ]
+                if 'en' in automatic_captions:
+                    result["automatic_captions"]['en'] = [
+                        {"ext": fmt.get('ext'), "url": fmt.get('url')[:100] + "..." if fmt.get('url') else None}
+                        for fmt in automatic_captions['en']
+                    ]
+
+            # Summary of all available languages
+            result["all_subtitle_languages"] = list(subtitles.keys())[:20]  # Limit to first 20
+            result["all_auto_caption_languages"] = list(automatic_captions.keys())[:20]
+
+            return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)} | Cookie file: {cookies_file}")
