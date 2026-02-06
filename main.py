@@ -47,9 +47,6 @@ def get_subtitles_with_ytdlp(video_id: str, lang: str = "en"):
     print(cookies_file)
     ydl_opts = {
         'skip_download': True,
-        'writesubtitles': True,
-        'writeautomaticsub': True,
-        'subtitleslangs': [lang, 'en'],
         'quiet': True,
         'no_warnings': True,
         'cookiefile': cookies_file,
