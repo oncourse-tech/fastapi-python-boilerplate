@@ -1,12 +1,16 @@
 import re
 import json
 import base64
+import time
 import tempfile
 import urllib.request
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import RedirectResponse
 import yt_dlp
 
+
+# Cached cookies file path (created once, reused across requests)
+_cookies_file_path = None
 
 # YouTube cookies for authentication (base64 encoded)
 COOKIES_BASE64 = "IyBOZXRzY2FwZSBIVFRQIENvb2tpZSBGaWxlCiMgaHR0cHM6Ly9jdXJsLmhheHguc2UvcmZjL2Nvb2tpZV9zcGVjLmh0bWwKIyBUaGlzIGlzIGEgZ2VuZXJhdGVkIGZpbGUhIERvIG5vdCBlZGl0LgoKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE3NzIyNjMxNTMJR1BTCTEKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDY4MjEzNzIJUFJFRglmND00MDAwMDAwJmY2PTQwMDAwMDAwJnR6PUFzaWEuQ2FsY3V0dGEKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDM3OTczNzAJX19TZWN1cmUtMVBTSURUUwlzaWR0cy1DalFCQmoxQ1lyeVhmdHJnbkFsNml2RzBVeW5PNTlTdmp3QkVjWlhoZUVLTC1YRXVTaU5LSjhCWjdCdzItQkRIR3UwRzRxMndFQUEKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDM3OTczNzAJX19TZWN1cmUtM1BTSURUUwlzaWR0cy1DalFCQmoxQ1lyeVhmdHJnbkFsNml2RzBVeW5PNTlTdmp3QkVjWlhoZUVLTC1YRXVTaU5LSjhCWjdCdzItQkRIR3UwRzRxMndFQUEKLnlvdXR1YmUuY29tCVRSVUUJLwlGQUxTRQkxODA2ODIxMzcwCUhTSUQJQWNaQms1eWV3TzZEaHI0MTMKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDY4MjEzNzAJU1NJRAlBT3NQZDhHb0lGSDZIczBVWgoueW91dHViZS5jb20JVFJVRQkvCUZBTFNFCTE4MDY4MjEzNzAJQVBJU0lECWNzeEtrTjVXaWFkYkJSbmEvQXBHcHNiQ094dmNTaFl4cG8KLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDY4MjEzNzAJU0FQSVNJRAk1NnVqV3dRN0pDcDQwbHRaL0FpdHVyWURSc2JsNDNyVGJiCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODA2ODIxMzcwCV9fU2VjdXJlLTFQQVBJU0lECTU2dWpXd1E3SkNwNDBsdFovQWl0dXJZRFJzYmw0M3JUYmIKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDY4MjEzNzAJX19TZWN1cmUtM1BBUElTSUQJNTZ1ald3UTdKQ3A0MGx0Wi9BaXR1cllEUnNibDQzclRiYgoueW91dHViZS5jb20JVFJVRQkvCUZBTFNFCTE4MDY4MjEzNzAJU0lECWcuYTAwMDdRakUyeHRSVlhvQXRRVkgwZHVpaHVrX28tVGN2RGgtRHIzdXJUZDFqU1hnTHV3UDY2bEtfMW1NTnlONHFJMUFSa1dtWHdBQ2dZS0FYb1NBUlFTRlFIR1gyTWkzOExNNUd1WG9zTE8zNEpxMDlDZ2l4b1ZBVUY4eUtvSXVZbzhsZ0loaG9uQVVVWXlEM1NqMDA3NgoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgwNjgyMTM3MAlfX1NlY3VyZS0xUFNJRAlnLmEwMDA3UWpFMnh0UlZYb0F0UVZIMGR1aWh1a19vLVRjdkRoLURyM3VyVGQxalNYZ0x1d1Bod2pWVHgyUWpxekxNemVsaXBKdEt3QUNnWUtBUWdTQVJRU0ZRSEdYMk1pRk80dzhlRldmMWgtT0xoSHhZU0FLeG9WQVVGOHlLclR0UDNTVWNla1JTY2RzYjNlYmdmQTAwNzYKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDY4MjEzNzAJX19TZWN1cmUtM1BTSUQJZy5hMDAwN1FqRTJ4dFJWWG9BdFFWSDBkdWlodWtfby1UY3ZEaC1EcjN1clRkMWpTWGdMdXdQY2VjbDdPUnEyRE9FRUlaYjNua0dQd0FDZ1lLQWI0U0FSUVNGUUhHWDJNaUh5MDB4SnVMUmN2aEpiTFFBd1hhUGhvVkFVRjh5S3BEVEtWZGxiN2pqVE5kOXJuNVVfajMwMDc2Ci55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODA2ODIxMzcxCUxPR0lOX0lORk8JQUZtbUYyc3dSZ0loQUtFeTRHc3lKSFhqR1E2YjJxcHRRbkNscGhYTGlfQXYwcGpZd1hWUE1aUzdBaUVBbjR1eGZHaGNjQzMtZDBXOFBSSjZSWnVnTUNrNkZaYWROLU83RDhqaUZodzpRVVEzTWpObWVuUlVjMkpLZVhaTmNHbEpiWEZ3YUV0WWRVRjBURFpGZUdGbk1tSkdhMDFXVDBwTU5UWjFiR3gzZEdwcmJscHJaRzlOUTBoSmFUUTJSR3R6V0daTGRGVkpRVFpJV2tKMGVIRnZSRWxOTldWMVkwNXhhRU53VTJ4dE9WVlNhQzF1T1RWVFVqa3haRWhWWm5wcmNHVmFNRVk1VlV4SWExSXhlakZrVEd4MGJtd3lVemxaVXkwM1VEaFhkMUIyWlVwMlZXUXhaazVZVUVOWE5GbFIKLnlvdXR1YmUuY29tCVRSVUUJLwlGQUxTRQkxODAzNzk3MzgxCVNJRENDCUFLRXlYeldvV2Jsd1pqekctdU9qQlJiSnVUWERYVFc1dXdKZm9HWi1PU0ZIdVRFMHNCMEl2OE1hMkQ3cHRMUGhiZ0h4VnVuZ3Z3Ci55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODAzNzk3MzgxCV9fU2VjdXJlLTFQU0lEQ0MJQUtFeVh6V1pwTjEzT3p1QW9LUHYzeU42N1RHOXU4aUk2TWFUbHlMU1N4QXItNmVLakpESFBoOHl0ejZLa3JCNTNnc3pWUlBKcmcKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDM3OTczODEJX19TZWN1cmUtM1BTSURDQwlBS0V5WHpXM01kVWVMQzJObkVCWUtMeTVockM3dEZST1dUQl9IUmRUajh6TmZGOUhqQzA2b0xRak5IY1hVaHZfY21XSGI3bVYKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTAJWVNDCVVEV1J5SDVDb01vCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxNzg3ODEzMzc1CVZJU0lUT1JfSU5GTzFfTElWRQlMbkkybHBSTG9CcwoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTc4NzgxMzM3NQlWSVNJVE9SX1BSSVZBQ1lfTUVUQURBVEEJQ2dKSlRoSUVHZ0FnQ2clM0QlM0QKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE3ODc4MTMzNTIJX19TZWN1cmUtWU5JRAkxNi5ZVD1BWlVwclFIWjducUY4RUE0Wm1TbFZFdTZ2cnpPcVJoR0F5TDhsOHR5VTNZcnk0TEJYUmJvR0hMTGFiMDhXQkxzcF9JaHE0b3N4SnFHSWd3V29MSzVCUTF4MEI0OUNCUE15Z3F0STdIRjZ3NXZUQVB6OUI3NEFQQTFodTRvOFN5LVRxT2sxTzYzNkRia0kzZTFxNnJRcTRHTDJ2cE11bnZMbWtnaGljbXkzMVYwYUh1Qlotb241Y0tSUFJQSDN6aFBqUVBzV2Y5Ui01bVpmMUdTRE1wa1RqT2d0aFUtWjY1Ym5ic2hNb1FCYjF0aXJuY2Y1Ulo5X0ZIZFNuakd0MllWbEN3RUkxeDJzeDNvbFV4SExHVEZRQVVHeWlyMkhmcXJsM1c3QmZTR3ltdy1pU0JlSEhDaEJrdzU4M1NjaTg4dm9hNlgwOW1PaWhSQ1Ytb080NGVIU1EKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE3ODc4MTMzNTQJX19TZWN1cmUtUk9MTE9VVF9UT0tFTglDUFdKMk15QmpiZmxwUUVRM3NfMmdzejdrZ01ZMC1IVGc4ejdrZ00lM0QK"
@@ -16,12 +20,15 @@ def get_cookies_content():
 
 
 def get_cookies_file():
-    """Create a temporary cookies file from base64 encoded content and return its path."""
-    cookies_content = get_cookies_content()
-    tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
-    tmp.write(cookies_content)
-    tmp.close()
-    return tmp.name
+    """Create a temporary cookies file once and reuse it across requests."""
+    global _cookies_file_path
+    if _cookies_file_path is None:
+        cookies_content = get_cookies_content()
+        tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        tmp.write(cookies_content)
+        tmp.close()
+        _cookies_file_path = tmp.name
+    return _cookies_file_path
 
 
 app = FastAPI(
@@ -62,30 +69,38 @@ def get_subtitles_with_ytdlp(video_id: str, lang: str = "en"):
     # Preferred formats in order
     preferred_formats = ['json3', 'srv3', 'vtt', 'ttml']
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            subtitles = info.get('subtitles', {})
-            automatic_captions = info.get('automatic_captions', {})
+    last_error = None
+    for attempt in range(3):
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                subtitles = info.get('subtitles', {})
+                automatic_captions = info.get('automatic_captions', {})
 
-            for lang_code in [lang, 'en']:
-                # Try subtitles first, then automatic captions
-                for caption_source, is_auto in [(subtitles, False), (automatic_captions, True)]:
-                    if lang_code in caption_source:
-                        # Try preferred formats in order
-                        for preferred_ext in preferred_formats:
-                            for fmt in caption_source[lang_code]:
-                                if fmt.get('ext') == preferred_ext:
-                                    return fmt.get('url'), lang_code, is_auto, fmt.get('ext'), None
-                        # Fallback: return first available format
-                        if caption_source[lang_code]:
-                            fmt = caption_source[lang_code][0]
-                            return fmt.get('url'), lang_code, is_auto, fmt.get('ext'), None
+                for lang_code in [lang, 'en']:
+                    # Try subtitles first, then automatic captions
+                    for caption_source, is_auto in [(subtitles, False), (automatic_captions, True)]:
+                        if lang_code in caption_source:
+                            # Try preferred formats in order
+                            for preferred_ext in preferred_formats:
+                                for fmt in caption_source[lang_code]:
+                                    if fmt.get('ext') == preferred_ext:
+                                        return fmt.get('url'), lang_code, is_auto, fmt.get('ext'), None
+                            # Fallback: return first available format
+                            if caption_source[lang_code]:
+                                fmt = caption_source[lang_code][0]
+                                return fmt.get('url'), lang_code, is_auto, fmt.get('ext'), None
 
-            return None, None, None, None, None
-    except Exception as e:
-        cookies_content = get_cookies_content()
-        return None, None, None, None, f"Error: {str(e)} | Cookie file: {cookies_file} | Cookies: {cookies_content}"
+                return None, None, None, None, None
+        except Exception as e:
+            last_error = e
+            if '429' in str(e) and attempt < 2:
+                time.sleep(2 ** attempt)  # 1s, 2s backoff
+                continue
+            break
+
+    cookies_content = get_cookies_content()
+    return None, None, None, None, f"Error: {str(last_error)} | Cookie file: {cookies_file} | Cookies: {cookies_content}"
 
 
 def parse_subtitles(subtitle_url: str, fmt: str):
